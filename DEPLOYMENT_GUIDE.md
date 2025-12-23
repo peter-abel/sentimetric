@@ -163,7 +163,7 @@ When you make changes:
 #### Installation (1-2 min)
 ```python
 # Show on screen
-pip install sentiment-analyzer
+pip install sentimetric
 
 import sentiment
 result = sentiment.analyze("This is amazing!")

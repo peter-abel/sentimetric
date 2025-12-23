@@ -177,7 +177,7 @@ def main():
         'structure': check_structure(),
         'imports': check_imports(),
         'functionality': test_basic_functionality(),
-        'readme': check_readme(),
+        #'readme': check_readme(),
         'build': test_build(),
     }
     

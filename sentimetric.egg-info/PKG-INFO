@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: sentimetric
-Version: 1.0.0
+Version: 1.0.2
 Summary: A modern sentiment analysis library with optional LLM support
 Home-page: https://github.com/peter-abel/sentimetric
 Author: Abel Peter
@@ -47,8 +47,9 @@ Sentimetric is a modern, fast, and accurate sentiment analysis library with opti
 ## ✨ Features
 
 - 🚀 Fast Rule-Based Analysis
-- 🧠 LLM-Powered Analysis (optional)
-- 📊 Batch Processing
+- 🧠 Multi-LLM Support (OpenAI, Google Gemini, Anthropic Claude, Cohere, Hugging Face)
+- 💰 Cost-Aware Model Selection with automatic fallback to cheaper models
+- 📊 Batch Processing with parallel execution
 - 🎯 High Accuracy with modern slang & emojis
 - 🔧 Simple API: `from sentimetric import analyze`
 
@@ -71,18 +72,77 @@ print(result)
 # Example output: SentimentResult(polarity=+0.90, category='positive', confidence=0.85)
 ```
 
-### LLM Usage
+### Multi-LLM Usage
 
-Set your Anthropic API key in the environment to use LLM features:
+Sentimetric now supports multiple LLM providers! Choose from OpenAI, Google Gemini, Anthropic Claude, Cohere, or Hugging Face.
+
+#### Installation with LLM Support
+
+```bash
+# Install with all LLM providers
+pip install "sentimetric[all]"
+
+# Or install specific providers
+pip install "sentimetric[openai]"      # For OpenAI
+pip install "sentimetric[google]"      # For Google Gemini
+pip install "sentimetric[anthropic]"   # For Anthropic Claude
+pip install "sentimetric[cohere]"      # For Cohere
+pip install "sentimetric[huggingface]" # For Hugging Face
+```
+
+#### Basic LLM Usage
 
 ```python
-import os
-os.environ['ANTHROPIC_API_KEY'] = 'your-key-here'
-
 from sentimetric import LLMAnalyzer
-analyzer = LLMAnalyzer()
+
+# Auto-selects the best available provider
+analyzer = LLMAnalyzer()  # Automatically detects available API keys
+
+# Or specify a provider
+analyzer = LLMAnalyzer(provider="openai", model="gpt-3.5-turbo")
+# analyzer = LLMAnalyzer(provider="google", model="gemini-1.5-flash")
+# analyzer = LLMAnalyzer(provider="anthropic", model="claude-3-haiku-20240307")
+# analyzer = LLMAnalyzer(provider="cohere", model="command")
+# analyzer = LLMAnalyzer(provider="huggingface", model="mistralai/Mixtral-8x7B-Instruct-v0.1")
+
 result = analyzer.analyze("Oh great, another bug 🙄")
-print(result.category)
+print(result.category)  # 'negative' (catches sarcasm)
+print(result.reasoning) # Explanation from the LLM
+```
+
+#### Environment Variables
+
+Set your API keys as environment variables:
+
+```bash
+# OpenAI
+export OPENAI_API_KEY="your-openai-key"
+
+# Google Gemini
+export GOOGLE_API_KEY="your-google-key"
+
+# Anthropic Claude
+export ANTHROPIC_API_KEY="your-anthropic-key"
+
+# Cohere
+export COHERE_API_KEY="your-cohere-key"
+
+# Hugging Face
+export HUGGINGFACE_API_KEY="your-hf-key"
+```
+
+#### Cost-Aware Features
+
+```python
+# Auto-select cheapest model
+analyzer = LLMAnalyzer(provider="openai", model="auto")  # Uses gpt-3.5-turbo
+
+# Fallback to cheaper models on failure
+analyzer = LLMAnalyzer(
+    provider="openai",
+    model="gpt-4",
+    fallback_to_cheaper=True  # Falls back to gpt-3.5-turbo if gpt-4 fails
+)
 ```
 
 ## 📚 Examples
@@ -91,9 +151,22 @@ See `examples.py` for comprehensive usage examples. Use `python examples.py` to 
 
 ## 🛠️ API Reference
 
-- `from sentimetric import analyze`
-- `from sentimetric import analyze_batch, compare_methods`
-- Classes: `Analyzer`, `LLMAnalyzer`, `SentimentResult`, `Benchmark`
+### Core Functions
+- `analyze(text, method='auto')` - Quick sentiment analysis
+- `analyze_batch(texts, method='rule')` - Batch sentiment analysis
+- `compare_methods(text, api_key=None)` - Compare rule-based vs LLM analysis
+
+### Classes
+- `Analyzer` - Fast rule-based sentiment analyzer
+- `LLMAnalyzer` - Multi-provider LLM analyzer (OpenAI, Google, Anthropic, Cohere, Hugging Face)
+- `SentimentResult` - Result container with polarity, category, confidence, reasoning, emotions, tone
+- `Benchmark` - Accuracy testing and comparison utilities
+
+### LLMAnalyzer Constructor Parameters
+- `provider` - LLM provider ('openai', 'google', 'anthropic', 'cohere', 'huggingface', or 'auto')
+- `model` - Model name or 'auto' for cheapest available
+- `api_key` - API key (optional, uses environment variables)
+- `fallback_to_cheaper` - Whether to fall back to cheaper models if requested model fails (default: True)
 
 ## 📞 Support
 

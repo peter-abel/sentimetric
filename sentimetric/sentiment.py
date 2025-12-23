@@ -269,67 +269,71 @@ class LLMAnalyzer:
             'models': ['gpt-4o', 'gpt-4', 'gpt-3.5-turbo'],
             'cheapest': 'gpt-3.5-turbo',
             'env_var': 'OPENAI_API_KEY',
-            'package': 'openai'
+            'package': 'openai',
+            'key_prefix': 'sk-'
         },
         'google': {
             'name': 'Google Gemini',
             'models': ['gemini-1.5-pro', 'gemini-1.5-flash'],
             'cheapest': 'gemini-1.5-flash',
             'env_var': 'GOOGLE_API_KEY',
-            'package': 'google-generativeai'
+            'package': 'google-generativeai',
+            'key_prefix': None
         },
         'anthropic': {
             'name': 'Anthropic Claude',
             'models': ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
             'cheapest': 'claude-3-haiku-20240307',
             'env_var': 'ANTHROPIC_API_KEY',
-            'package': 'anthropic'
+            'package': 'anthropic',
+            'key_prefix': 'sk-ant-'
         },
         'cohere': {
             'name': 'Cohere',
             'models': ['command-r-plus', 'command-r', 'command'],
             'cheapest': 'command',
             'env_var': 'COHERE_API_KEY',
-            'package': 'cohere'
+            'package': 'cohere',
+            'key_prefix': None
         },
         'huggingface': {
             'name': 'Hugging Face',
             'models': ['mistralai/Mixtral-8x7B-Instruct-v0.1', 'meta-llama/Llama-2-70b-chat-hf'],
             'cheapest': 'mistralai/Mixtral-8x7B-Instruct-v0.1',
             'env_var': 'HUGGINGFACE_API_KEY',
-            'package': 'huggingface_hub'
+            'package': 'huggingface_hub',
+            'key_prefix': 'hf_'
         }
     }
     
     def __init__(self, provider: str = "auto", model: str = "auto", 
-                 api_key: Optional[str] = None, fallback_to_cheaper: bool = True):
+                 api_key: Optional[str] = None, fallback_to_cheaper: bool = True,
+                 config_file: Optional[str] = None):
         """
         Initialize LLM analyzer with multi-provider support
         
         Args:
             provider: LLM provider ('openai', 'google', 'anthropic', 'cohere', 'huggingface', or 'auto')
             model: Model name (provider-specific) or 'auto' for cheapest available
-            api_key: API key for the provider (optional, uses environment variables)
+            api_key: API key for the provider (optional, uses multiple resolution methods)
             fallback_to_cheaper: Whether to fall back to cheaper models if requested model fails
+            config_file: Optional path to configuration file (JSON, YAML, or .env format)
         """
         import os
         
         self.provider = provider.lower() if provider != "auto" else self._detect_best_provider()
         self.fallback_to_cheaper = fallback_to_cheaper
+        self._client_initialized = False
+        self._client = None
+        self._analyze_func = None
         
         if self.provider not in self.PROVIDERS:
             raise ValueError(f"Unknown provider: {provider}. Available: {list(self.PROVIDERS.keys())}")
         
         provider_info = self.PROVIDERS[self.provider]
         
-        # Get API key
-        self.api_key = api_key or os.getenv(provider_info['env_var'])
-        if not self.api_key:
-            raise ValueError(
-                f"{provider_info['name']} API key required. Either:\n"
-                f"  1. Pass api_key parameter: LLMAnalyzer(provider='{self.provider}', api_key='your-key')\n"
-                f"  2. Set environment variable: export {provider_info['env_var']}='your-key'"
-            )
+        # Get API key using comprehensive resolution
+        self.api_key = self._resolve_api_key(api_key, provider_info, config_file)
         
         # Select model
         if model == "auto":
@@ -339,9 +343,6 @@ class LLMAnalyzer:
         else:
             # Try to use the model anyway (might be a valid model not in our list)
             self.model = model
-        
-        # Initialize provider-specific client
-        self._init_provider_client()
         
         # Common system prompt
         self.system_prompt = """Analyze sentiment. Respond ONLY with JSON (no markdown):
@@ -355,6 +356,271 @@ class LLMAnalyzer:
 }
 
 Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
+    
+    def _resolve_api_key(self, api_key: Optional[str], provider_info: dict, config_file: Optional[str]) -> Optional[str]:
+        """
+        Resolve API key using comprehensive priority order:
+        1. Direct api_key parameter (supports multiple formats)
+        2. Environment variable
+        3. Configuration file
+        4. Platform-specific keychain/secure storage
+        
+        Returns:
+            API key if found, None otherwise
+        """
+        import os
+        
+        # 1. Direct api_key parameter (supports multiple formats)
+        if api_key is not None:
+            # Parse API key from different formats
+            parsed_key = self._parse_api_key(api_key, provider_info)
+            if parsed_key:
+                if self._validate_api_key(parsed_key, provider_info):
+                    return parsed_key
+                else:
+                    print(f"Warning: Provided API key for {provider_info['name']} may be invalid")
+                    return parsed_key  # Still return it, validation is just a warning
+        
+        # 2. Environment variable
+        env_key = os.getenv(provider_info['env_var'])
+        if env_key:
+            if self._validate_api_key(env_key, provider_info):
+                return env_key
+            else:
+                print(f"Warning: Environment variable {provider_info['env_var']} may contain invalid API key")
+                return env_key
+        
+        # 3. Configuration file
+        config_key = self._get_api_key_from_config(provider_info, config_file)
+        if config_key:
+            if self._validate_api_key(config_key, provider_info):
+                return config_key
+            else:
+                print(f"Warning: API key from config file for {provider_info['name']} may be invalid")
+                return config_key
+        
+        # 4. Platform-specific keychain (future enhancement)
+        # keychain_key = self._get_api_key_from_keychain(provider_info)
+        # if keychain_key:
+        #     return keychain_key
+        
+        # No API key found
+        return None
+    
+    def _parse_api_key(self, api_key_input, provider_info: dict) -> Optional[str]:
+        """
+        Parse API key from different input formats
+        
+        Supports:
+        - Direct string: "sk-abc123"
+        - Dictionary: {"openai_api_key": "sk-abc123"} or {"api_key": "sk-abc123"}
+        - Provider string: "openai:sk-abc123"
+        - File path: "@/path/to/key.txt"
+        - JSON string: '{"key": "sk-abc123"}'
+        
+        Args:
+            api_key_input: API key input in various formats
+            provider_info: Provider configuration
+            
+        Returns:
+            Parsed API key string or None
+        """
+        import os
+        import json
+        
+        # If it's already a string, return it
+        if isinstance(api_key_input, str):
+            # Check if it's a file path (starts with @)
+            if api_key_input.startswith('@'):
+                file_path = api_key_input[1:]
+                try:
+                    if os.path.exists(file_path):
+                        with open(file_path, 'r') as f:
+                            return f.read().strip()
+                except:
+                    pass
+                return None
+            
+            # Check if it's a provider:key format
+            if ':' in api_key_input and not api_key_input.startswith('sk-'):
+                parts = api_key_input.split(':', 1)
+                if len(parts) == 2:
+                    provider_part, key_part = parts
+                    if provider_part.lower() == self.provider:
+                        return key_part
+            
+            # Check if it's a JSON string
+            if api_key_input.strip().startswith('{'):
+                try:
+                    data = json.loads(api_key_input)
+                    if isinstance(data, dict):
+                        # Try to find the key in the dictionary
+                        possible_keys = [
+                            provider_info['env_var'].lower(),
+                            provider_info['env_var'].lower().replace('_api_key', ''),
+                            f"{self.provider}_api_key",
+                            self.provider,
+                            'api_key',
+                            'key'
+                        ]
+                        for key in possible_keys:
+                            if key in data:
+                                value = data[key]
+                                if isinstance(value, str):
+                                    return value
+                except:
+                    pass
+            
+            # Return the string as-is
+            return api_key_input
+        
+        # If it's a dictionary
+        elif isinstance(api_key_input, dict):
+            possible_keys = [
+                provider_info['env_var'].lower(),
+                provider_info['env_var'].lower().replace('_api_key', ''),
+                f"{self.provider}_api_key",
+                self.provider,
+                'api_key',
+                'key'
+            ]
+            for key in possible_keys:
+                if key in api_key_input:
+                    value = api_key_input[key]
+                    if isinstance(value, str):
+                        return value
+        
+        # If it's None, return None
+        elif api_key_input is None:
+            return None
+        
+        # Try to convert to string
+        try:
+            return str(api_key_input)
+        except:
+            return None
+    
+    def _validate_api_key(self, api_key: str, provider_info: dict) -> bool:
+        """
+        Validate API key format
+        
+        Args:
+            api_key: API key to validate
+            provider_info: Provider configuration
+            
+        Returns:
+            True if key appears valid, False otherwise
+        """
+        if not api_key or not isinstance(api_key, str):
+            return False
+        
+        key_prefix = provider_info.get('key_prefix')
+        if key_prefix and api_key.startswith(key_prefix):
+            return True
+        
+        # If no specific prefix expected, check basic format
+        if len(api_key) >= 10:  # Most API keys are at least 10 characters
+            return True
+        
+        return False
+    
+    def _get_api_key_from_config(self, provider_info: dict, config_file: Optional[str]) -> Optional[str]:
+        """
+        Get API key from configuration file
+        
+        Args:
+            provider_info: Provider configuration
+            config_file: Optional path to config file
+            
+        Returns:
+            API key if found in config, None otherwise
+        """
+        import os
+        import json
+        import yaml
+        
+        # Try default config file locations if not specified
+        config_files_to_try = []
+        if config_file:
+            config_files_to_try.append(config_file)
+        else:
+            # Default config file locations
+            config_files_to_try.extend([
+                '.env',
+                'config.json',
+                'config.yaml',
+                'config.yml',
+                '~/.sentimetric/config.json',
+                '~/.sentimetric/config.yaml',
+            ])
+        
+        for file_path in config_files_to_try:
+            try:
+                # Expand user directory
+                if file_path.startswith('~'):
+                    file_path = os.path.expanduser(file_path)
+                
+                if not os.path.exists(file_path):
+                    continue
+                
+                # Try to parse based on file extension
+                if file_path.endswith('.json'):
+                    with open(file_path, 'r') as f:
+                        config = json.load(f)
+                    
+                    # Look for API key in various possible locations
+                    possible_keys = [
+                        provider_info['env_var'].lower(),
+                        provider_info['env_var'].lower().replace('_api_key', ''),
+                        f"{self.provider}_api_key",
+                        self.provider,
+                        'api_key'
+                    ]
+                    
+                    for key in possible_keys:
+                        if key in config:
+                            return str(config[key])
+                
+                elif file_path.endswith(('.yaml', '.yml')):
+                    try:
+                        with open(file_path, 'r') as f:
+                            config = yaml.safe_load(f)
+                        
+                        if config:
+                            possible_keys = [
+                                provider_info['env_var'].lower(),
+                                provider_info['env_var'].lower().replace('_api_key', ''),
+                                f"{self.provider}_api_key",
+                                self.provider,
+                                'api_key'
+                            ]
+                            
+                            for key in possible_keys:
+                                if key in config:
+                                    return str(config[key])
+                    except ImportError:
+                        # yaml not installed
+                        pass
+                
+                elif file_path.endswith('.env') or os.path.basename(file_path) == '.env':
+                    # Parse .env file
+                    with open(file_path, 'r') as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith('#'):
+                                if '=' in line:
+                                    key, value = line.split('=', 1)
+                                    key = key.strip()
+                                    value = value.strip().strip('"\'')
+                                    
+                                    if key == provider_info['env_var']:
+                                        return value
+                
+            except Exception as e:
+                # Silently continue to next config file
+                continue
+        
+        return None
     
     def _detect_best_provider(self) -> str:
         """Detect the best available provider based on environment variables"""
@@ -377,41 +643,67 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
         return 'anthropic'
     
     def _init_provider_client(self):
-        """Initialize provider-specific client"""
+        """Initialize provider-specific client (lazy initialization)"""
+        if self._client_initialized:
+            return
+        
+        # Check if API key is available
+        if not self.api_key:
+            provider_info = self.PROVIDERS[self.provider]
+            raise ValueError(
+                f"{provider_info['name']} API key required. Available options:\n"
+                f"  1. Pass api_key parameter: LLMAnalyzer(provider='{self.provider}', api_key='your-key')\n"
+                f"  2. Set environment variable: export {provider_info['env_var']}='your-key'\n"
+                f"  3. Create a config file (.env, config.json, or config.yaml) with the key\n"
+                f"  4. Use a configuration file: LLMAnalyzer(config_file='path/to/config.yaml')\n\n"
+                f"Example with API key:\n"
+                f"  analyzer = LLMAnalyzer(provider='{self.provider}', api_key='your-key-here')"
+            )
+        
         try:
             if self.provider == 'openai':
                 import openai
-                self.client = openai.OpenAI(api_key=self.api_key)
+                self._client = openai.OpenAI(api_key=self.api_key)
                 self._analyze_func = self._analyze_openai
                 
             elif self.provider == 'google':
                 import google.generativeai as genai
                 genai.configure(api_key=self.api_key)
-                self.client = genai
+                self._client = genai
                 self._analyze_func = self._analyze_google
                 
             elif self.provider == 'anthropic':
                 import anthropic
-                self.client = anthropic.Anthropic(api_key=self.api_key)
+                self._client = anthropic.Anthropic(api_key=self.api_key)
                 self._analyze_func = self._analyze_anthropic
                 
             elif self.provider == 'cohere':
                 import cohere
-                self.client = cohere.Client(self.api_key)
+                self._client = cohere.Client(self.api_key)
                 self._analyze_func = self._analyze_cohere
                 
             elif self.provider == 'huggingface':
                 from huggingface_hub import InferenceClient
-                self.client = InferenceClient(token=self.api_key)
+                self._client = InferenceClient(token=self.api_key)
                 self._analyze_func = self._analyze_huggingface
                 
+            self._client_initialized = True
+            
         except ImportError as e:
             raise ImportError(
                 f"Package required for {self.PROVIDERS[self.provider]['name']}: "
-                f"pip install {self.PROVIDERS[self.provider]['package']}"
+                f"pip install {self.PROVIDERS[self.provider]['package']}\n"
+                f"Or install all LLM providers: pip install sentimetric[all]"
             )
         except Exception as e:
             raise RuntimeError(f"Failed to initialize {self.provider} client: {e}")
+    
+    @property
+    def client(self):
+        """Lazy client access - initializes client if needed"""
+        if not self._client_initialized:
+            self._init_provider_client()
+        return self._client
     
     def analyze(self, text: str) -> SentimentResult:
         """
@@ -426,6 +718,10 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
         if not text or not text.strip():
             return SentimentResult(0.0, 'neutral', 0.0, 0.0, 'llm')
         
+        # Ensure client is initialized
+        if not self._client_initialized:
+            self._init_provider_client()
+        
         try:
             return self._analyze_func(text)
         except Exception as e:
@@ -435,6 +731,11 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
                 original_model = self.model
                 self.model = self.PROVIDERS[self.provider]['cheapest']
                 try:
+                    # Re-initialize client with new model if needed
+                    if self.provider in ['openai', 'anthropic', 'cohere', 'huggingface']:
+                        self._client_initialized = False
+                        self._init_provider_client()
+                    
                     result = self._analyze_func(text)
                     result.method = f'llm_fallback({original_model}->{self.model})'
                     return result
@@ -452,7 +753,7 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
         """Analyze using OpenAI"""
         import json
         
-        response = self.client.chat.completions.create(
+        response = self._client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": self.system_prompt},
@@ -472,7 +773,7 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
         """Analyze using Google Gemini"""
         import json
         
-        model = self.client.GenerativeModel(self.model)
+        model = self._client.GenerativeModel(self.model)
         response = model.generate_content(
             f"{self.system_prompt}\n\nAnalyze: {text}",
             generation_config={
@@ -491,7 +792,7 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
         """Analyze using Anthropic Claude"""
         import json
         
-        response = self.client.messages.create(
+        response = self._client.messages.create(
             model=self.model,
             max_tokens=500,
             system=self.system_prompt,
@@ -508,7 +809,7 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
         """Analyze using Cohere"""
         import json
         
-        response = self.client.chat(
+        response = self._client.chat(
             model=self.model,
             message=f"Analyze: {text}",
             preamble=self.system_prompt,
@@ -527,7 +828,7 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
         import json
         
         prompt = f"{self.system_prompt}\n\nAnalyze: {text}"
-        response = self.client.text_generation(
+        response = self._client.text_generation(
             prompt,
             model=self.model,
             max_new_tokens=500,

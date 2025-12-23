@@ -159,39 +159,6 @@ When you make changes:
 
 ---
 
-## 🎥 Part 2: YouTube Promotion
-
-### Video Strategy
-
-Create 3-5 videos for maximum reach:
-
-1. **Tutorial Video** (10-15 min)
-   - "Build a Sentiment Analysis Tool in Python"
-   - Walk through installation and basic usage
-   - Show real examples
-
-2. **Advanced Features** (8-12 min)
-   - "Detect Sarcasm with AI: LLM-Powered Sentiment Analysis"
-   - Demonstrate LLM features
-   - Compare with rule-based
-
-3. **Real Project** (15-20 min)
-   - "Analyze 10,000 Product Reviews with Python"
-   - Build a complete project using your library
-   - Show practical applications
-
-4. **Short Form** (30-60 sec)
-   - YouTube Shorts showing quick wins
-   - "Analyze sentiment in 3 lines of code"
-
-### Video Content Template
-
-#### Introduction (0-1 min)
-```
-"In this video, I'll show you how to build a sentiment analysis tool 
-that can detect if text is positive, negative, or even sarcastic.
-We'll use a Python library I created called Sentiment Analyzer."
-```
 
 #### Installation (1-2 min)
 ```python
@@ -358,7 +325,8 @@ Docs: [GitHub link]
 ### Track Your Success
 
 1. **PyPI Stats**
-   - Check download stats at https://pypistats.org/packages/sentiment-analyzer
+   - Check download stats at https://pypistats.org/packages/sentimetric
+
    - Monitor daily/weekly/monthly downloads
 
 2. **YouTube Analytics**

@@ -11,7 +11,7 @@ setup(
     description="A modern sentiment analysis library with optional LLM support",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/sentimetric",
+    url="https://github.com/peter-abel/sentimetric",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -46,8 +46,9 @@ setup(
     },
     keywords="sentiment analysis nlp machine-learning llm claude",
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/sentimetric/issues",
-        "Source": "https://github.com/yourusername/sentimetric",
-        "Documentation": "https://github.com/yourusername/sentimetric#readme",
+        "Bug Reports": "https://github.com/peter-abel/sentimetric/issues",
+        "Source": "https://github.com/peter-abel/sentimetric",
+        "Documentation": "https://github.com/peter-abel/sentimetric#readme",
+
     },
 )

@@ -61,7 +61,7 @@ See `examples.py` for comprehensive usage examples. Use `python examples.py` to 
 
 - Author: Abel Peter
 - Email: peterabel791@gmail.com
-- Issues: https://github.com/yourusername/sentimetric/issues
+- Issues: https://github.com/peter-abel/sentimetric/issues
 
 ---
 

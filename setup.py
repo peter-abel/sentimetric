@@ -38,6 +38,28 @@ setup(
             "flake8>=6.0.0",
             "mypy>=1.0.0",
         ],
+        "openai": [
+            "openai>=1.0.0",
+        ],
+        "google": [
+            "google-generativeai>=0.3.0",
+        ],
+        "anthropic": [
+            "anthropic>=0.25.0",
+        ],
+        "cohere": [
+            "cohere>=5.0.0",
+        ],
+        "huggingface": [
+            "huggingface-hub>=0.20.0",
+        ],
+        "all": [
+            "openai>=1.0.0",
+            "google-generativeai>=0.3.0",
+            "anthropic>=0.25.0",
+            "cohere>=5.0.0",
+            "huggingface-hub>=0.20.0",
+        ],
     },
     entry_points={
         "console_scripts": [

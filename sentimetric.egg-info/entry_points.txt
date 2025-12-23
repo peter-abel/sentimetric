@@ -1,0 +1,2 @@
+[console_scripts]
+sentimetric = sentimetric.sentiment:main

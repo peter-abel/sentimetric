@@ -251,32 +251,99 @@ class Analyzer:
 
 class LLMAnalyzer:
     """
-    LLM-powered sentiment analyzer using Claude API
+    LLM-powered sentiment analyzer supporting multiple providers
     
     Good for: Complex emotions, sarcasm, nuanced context, mixed feelings
-    Requires: ANTHROPIC_API_KEY environment variable or api_key parameter
+    Supports: OpenAI, Google Gemini, Anthropic Claude, Cohere, Hugging Face
+    
+    Example:
+        >>> analyzer = LLMAnalyzer(provider="openai", model="gpt-3.5-turbo")
+        >>> result = analyzer.analyze("Oh great, another bug 🙄")
+        >>> print(result.category)  # 'negative' (catches sarcasm)
     """
     
-    def __init__(self, api_key: Optional[str] = None, model: str = "claude-sonnet-4-20250514"):
+    # Provider configurations
+    PROVIDERS = {
+        'openai': {
+            'name': 'OpenAI',
+            'models': ['gpt-4o', 'gpt-4', 'gpt-3.5-turbo'],
+            'cheapest': 'gpt-3.5-turbo',
+            'env_var': 'OPENAI_API_KEY',
+            'package': 'openai'
+        },
+        'google': {
+            'name': 'Google Gemini',
+            'models': ['gemini-1.5-pro', 'gemini-1.5-flash'],
+            'cheapest': 'gemini-1.5-flash',
+            'env_var': 'GOOGLE_API_KEY',
+            'package': 'google-generativeai'
+        },
+        'anthropic': {
+            'name': 'Anthropic Claude',
+            'models': ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
+            'cheapest': 'claude-3-haiku-20240307',
+            'env_var': 'ANTHROPIC_API_KEY',
+            'package': 'anthropic'
+        },
+        'cohere': {
+            'name': 'Cohere',
+            'models': ['command-r-plus', 'command-r', 'command'],
+            'cheapest': 'command',
+            'env_var': 'COHERE_API_KEY',
+            'package': 'cohere'
+        },
+        'huggingface': {
+            'name': 'Hugging Face',
+            'models': ['mistralai/Mixtral-8x7B-Instruct-v0.1', 'meta-llama/Llama-2-70b-chat-hf'],
+            'cheapest': 'mistralai/Mixtral-8x7B-Instruct-v0.1',
+            'env_var': 'HUGGINGFACE_API_KEY',
+            'package': 'huggingface_hub'
+        }
+    }
+    
+    def __init__(self, provider: str = "auto", model: str = "auto", 
+                 api_key: Optional[str] = None, fallback_to_cheaper: bool = True):
         """
-        Initialize LLM analyzer
+        Initialize LLM analyzer with multi-provider support
         
         Args:
-            api_key: Anthropic API key (or set ANTHROPIC_API_KEY env var)
-            model: Claude model to use
+            provider: LLM provider ('openai', 'google', 'anthropic', 'cohere', 'huggingface', or 'auto')
+            model: Model name (provider-specific) or 'auto' for cheapest available
+            api_key: API key for the provider (optional, uses environment variables)
+            fallback_to_cheaper: Whether to fall back to cheaper models if requested model fails
         """
         import os
-        self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
+        
+        self.provider = provider.lower() if provider != "auto" else self._detect_best_provider()
+        self.fallback_to_cheaper = fallback_to_cheaper
+        
+        if self.provider not in self.PROVIDERS:
+            raise ValueError(f"Unknown provider: {provider}. Available: {list(self.PROVIDERS.keys())}")
+        
+        provider_info = self.PROVIDERS[self.provider]
+        
+        # Get API key
+        self.api_key = api_key or os.getenv(provider_info['env_var'])
         if not self.api_key:
             raise ValueError(
-                "API key required. Either:\n"
-                "  1. Pass api_key parameter: LLMAnalyzer(api_key='your-key')\n"
-                "  2. Set environment variable: export ANTHROPIC_API_KEY='your-key'"
+                f"{provider_info['name']} API key required. Either:\n"
+                f"  1. Pass api_key parameter: LLMAnalyzer(provider='{self.provider}', api_key='your-key')\n"
+                f"  2. Set environment variable: export {provider_info['env_var']}='your-key'"
             )
         
-        self.model = model
-        self.base_url = "https://api.anthropic.com/v1/messages"
+        # Select model
+        if model == "auto":
+            self.model = provider_info['cheapest']
+        elif model in provider_info['models']:
+            self.model = model
+        else:
+            # Try to use the model anyway (might be a valid model not in our list)
+            self.model = model
         
+        # Initialize provider-specific client
+        self._init_provider_client()
+        
+        # Common system prompt
         self.system_prompt = """Analyze sentiment. Respond ONLY with JSON (no markdown):
 {
   "polarity": <-1.0 to 1.0>,
@@ -288,6 +355,63 @@ class LLMAnalyzer:
 }
 
 Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
+    
+    def _detect_best_provider(self) -> str:
+        """Detect the best available provider based on environment variables"""
+        import os
+        
+        # Check for API keys in environment
+        for provider, info in self.PROVIDERS.items():
+            if os.getenv(info['env_var']):
+                return provider
+        
+        # If no API keys found, check for installed packages
+        for provider, info in self.PROVIDERS.items():
+            try:
+                __import__(info['package'].replace('-', '_'))
+                return provider
+            except ImportError:
+                continue
+        
+        # Default to anthropic if nothing else (backward compatibility)
+        return 'anthropic'
+    
+    def _init_provider_client(self):
+        """Initialize provider-specific client"""
+        try:
+            if self.provider == 'openai':
+                import openai
+                self.client = openai.OpenAI(api_key=self.api_key)
+                self._analyze_func = self._analyze_openai
+                
+            elif self.provider == 'google':
+                import google.generativeai as genai
+                genai.configure(api_key=self.api_key)
+                self.client = genai
+                self._analyze_func = self._analyze_google
+                
+            elif self.provider == 'anthropic':
+                import anthropic
+                self.client = anthropic.Anthropic(api_key=self.api_key)
+                self._analyze_func = self._analyze_anthropic
+                
+            elif self.provider == 'cohere':
+                import cohere
+                self.client = cohere.Client(self.api_key)
+                self._analyze_func = self._analyze_cohere
+                
+            elif self.provider == 'huggingface':
+                from huggingface_hub import InferenceClient
+                self.client = InferenceClient(token=self.api_key)
+                self._analyze_func = self._analyze_huggingface
+                
+        except ImportError as e:
+            raise ImportError(
+                f"Package required for {self.PROVIDERS[self.provider]['name']}: "
+                f"pip install {self.PROVIDERS[self.provider]['package']}"
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize {self.provider} client: {e}")
     
     def analyze(self, text: str) -> SentimentResult:
         """
@@ -303,51 +427,137 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
             return SentimentResult(0.0, 'neutral', 0.0, 0.0, 'llm')
         
         try:
-            import requests
-            import json
-            
-            response = requests.post(
-                self.base_url,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-key": self.api_key,
-                    "anthropic-version": "2023-06-01"
-                },
-                json={
-                    "model": self.model,
-                    "max_tokens": 500,
-                    "system": self.system_prompt,
-                    "messages": [{"role": "user", "content": f"Analyze: {text}"}]
-                },
-                timeout=30
-            )
-            
-            if response.status_code != 200:
-                raise Exception(f"API error: {response.status_code}")
-            
-            content = response.json()['content'][0]['text'].strip()
-            content = content.replace('```json', '').replace('```', '').strip()
-            
-            data = json.loads(content)
-            
-            return SentimentResult(
-                polarity=float(data.get('polarity', 0.0)),
-                category=data.get('category', 'neutral'),
-                confidence=float(data.get('confidence', 0.5)),
-                subjectivity=0.8,  # LLM analyses are inherently subjective
-                method='llm',
-                reasoning=data.get('reasoning'),
-                emotions=data.get('emotions'),
-                tone=data.get('tone')
-            )
-            
+            return self._analyze_func(text)
         except Exception as e:
-            # Fallback to rule-based if LLM fails
+            # Try fallback to cheaper model if enabled
+            if self.fallback_to_cheaper and self.model != self.PROVIDERS[self.provider]['cheapest']:
+                print(f"Model {self.model} failed: {e}. Trying cheaper model...")
+                original_model = self.model
+                self.model = self.PROVIDERS[self.provider]['cheapest']
+                try:
+                    result = self._analyze_func(text)
+                    result.method = f'llm_fallback({original_model}->{self.model})'
+                    return result
+                except Exception as e2:
+                    print(f"Cheaper model also failed: {e2}")
+            
+            # Fallback to rule-based analysis
             print(f"LLM error: {e}. Falling back to rule-based analysis.")
             analyzer = Analyzer()
             result = analyzer.analyze(text)
             result.method = 'rule_based_fallback'
             return result
+    
+    def _analyze_openai(self, text: str) -> SentimentResult:
+        """Analyze using OpenAI"""
+        import json
+        
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": f"Analyze: {text}"}
+            ],
+            temperature=0.1,
+            max_tokens=500
+        )
+        
+        content = response.choices[0].message.content.strip()
+        content = content.replace('```json', '').replace('```', '').strip()
+        data = json.loads(content)
+        
+        return self._create_result(data)
+    
+    def _analyze_google(self, text: str) -> SentimentResult:
+        """Analyze using Google Gemini"""
+        import json
+        
+        model = self.client.GenerativeModel(self.model)
+        response = model.generate_content(
+            f"{self.system_prompt}\n\nAnalyze: {text}",
+            generation_config={
+                "temperature": 0.1,
+                "max_output_tokens": 500,
+            }
+        )
+        
+        content = response.text.strip()
+        content = content.replace('```json', '').replace('```', '').strip()
+        data = json.loads(content)
+        
+        return self._create_result(data)
+    
+    def _analyze_anthropic(self, text: str) -> SentimentResult:
+        """Analyze using Anthropic Claude"""
+        import json
+        
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=500,
+            system=self.system_prompt,
+            messages=[{"role": "user", "content": f"Analyze: {text}"}]
+        )
+        
+        content = response.content[0].text.strip()
+        content = content.replace('```json', '').replace('```', '').strip()
+        data = json.loads(content)
+        
+        return self._create_result(data)
+    
+    def _analyze_cohere(self, text: str) -> SentimentResult:
+        """Analyze using Cohere"""
+        import json
+        
+        response = self.client.chat(
+            model=self.model,
+            message=f"Analyze: {text}",
+            preamble=self.system_prompt,
+            temperature=0.1,
+            max_tokens=500
+        )
+        
+        content = response.text.strip()
+        content = content.replace('```json', '').replace('```', '').strip()
+        data = json.loads(content)
+        
+        return self._create_result(data)
+    
+    def _analyze_huggingface(self, text: str) -> SentimentResult:
+        """Analyze using Hugging Face"""
+        import json
+        
+        prompt = f"{self.system_prompt}\n\nAnalyze: {text}"
+        response = self.client.text_generation(
+            prompt,
+            model=self.model,
+            max_new_tokens=500,
+            temperature=0.1
+        )
+        
+        # Extract JSON from response
+        content = response.strip()
+        # Try to find JSON in the response
+        start_idx = content.find('{')
+        end_idx = content.rfind('}') + 1
+        if start_idx != -1 and end_idx != 0:
+            content = content[start_idx:end_idx]
+        
+        data = json.loads(content)
+        
+        return self._create_result(data)
+    
+    def _create_result(self, data: dict) -> SentimentResult:
+        """Create SentimentResult from provider response"""
+        return SentimentResult(
+            polarity=float(data.get('polarity', 0.0)),
+            category=data.get('category', 'neutral'),
+            confidence=float(data.get('confidence', 0.5)),
+            subjectivity=0.8,  # LLM analyses are inherently subjective
+            method=f'llm_{self.provider}',
+            reasoning=data.get('reasoning'),
+            emotions=data.get('emotions'),
+            tone=data.get('tone')
+        )
     
     def analyze_batch(self, texts: List[str], max_workers: int = 5) -> List[SentimentResult]:
         """

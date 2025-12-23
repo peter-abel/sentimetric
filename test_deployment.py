@@ -122,14 +122,15 @@ def test_build():
     try:
         import subprocess
         
+        # Clean previous build artifacts
         for dir in ['build', 'dist', 'sentimetric.egg-info', 'sentimetric-1.0.0.dist-info']:
             if Path(dir).exists():
                 import shutil
                 shutil.rmtree(dir)
         
-        print("   Building package...")
+        print("   Building package using current Python interpreter:", sys.executable)
         result = subprocess.run(
-            ['python', '-m', 'build'],
+            [sys.executable, '-m', 'build'],
             capture_output=True,
             text=True
         )
@@ -143,6 +144,7 @@ def test_build():
             return True
         else:
             print(f"❌ Build failed:")
+            print(result.stdout)
             print(result.stderr)
             return False
             
@@ -170,18 +172,84 @@ def print_summary(results):
         print("\n⚠️  Fix the issues above before deploying")
 
 
+import argparse
+
+
+def upload_to_repository(repository_url: str, token_env: str = 'TEST_PYPI_API_TOKEN'):
+    """Upload the contents of dist/ to the given repository using twine and a token read from an env var.
+
+    Returns True on success, False on failure, None if skipped (no token).
+    """
+    token = os.environ.get(token_env)
+    if not token:
+        print(f"⚠️  Upload skipped: environment variable {token_env} is not set.")
+        print("   Create a TestPyPI token and set it, e.g. on Windows: set TEST_PYPI_API_TOKEN=pypi-...")
+        return None
+
+    env = os.environ.copy()
+    env['TWINE_USERNAME'] = '__token__'
+    env['TWINE_PASSWORD'] = token
+
+    print(f"   Uploading distributions in dist/ to {repository_url} ...")
+    import subprocess
+    result = subprocess.run(
+        [sys.executable, '-m', 'twine', 'upload', '--repository-url', repository_url, 'dist/*'],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    if result.returncode == 0:
+        print("✅ Upload successful!")
+        return True
+    else:
+        print("❌ Upload failed:")
+        print(result.stdout)
+        print(result.stderr)
+        return False
+
+
 def main():
+    parser = argparse.ArgumentParser(description='Sentimetric pre-deployment checks and optional upload')
+    parser.add_argument('--skip-build', action='store_true', help='Run checks but skip building the package')
+    parser.add_argument('--upload', action='store_true', help='Upload the built distributions to TestPyPI')
+    parser.add_argument('--repository-url', default='https://test.pypi.org/legacy/', help='Repository URL for twine upload')
+    parser.add_argument('--token-env', default='TEST_PYPI_API_TOKEN', help='Environment variable name that stores the twine API token')
+
+    args = parser.parse_args()
+
     print("🚀 Sentimetric - Pre-deployment Check")
-    
+
     results = {
         'structure': check_structure(),
         'imports': check_imports(),
         'functionality': test_basic_functionality(),
         #'readme': check_readme(),
-        'build': test_build(),
     }
-    
+
+    build_result = None
+    if not args.skip_build:
+        build_result = test_build()
+        results['build'] = build_result
+    else:
+        print("⚠️  Skipping build step as requested")
+
     print_summary(results)
+
+    # If upload requested, attempt upload only if build succeeded or dist exists
+    if args.upload:
+        dist_exists = Path('dist').exists() and any(Path('dist').iterdir())
+        if build_result is False and not dist_exists:
+            print("❌ Cannot upload: build failed and no dist/ found")
+            return
+
+        upload_res = upload_to_repository(args.repository_url, token_env=args.token_env)
+        if upload_res is True:
+            print("🎉 Upload completed successfully")
+        elif upload_res is False:
+            print("⚠️  Upload failed - see messages above")
+        else:
+            print("⚠️  Upload skipped due to missing token")
 
 
 if __name__ == "__main__":

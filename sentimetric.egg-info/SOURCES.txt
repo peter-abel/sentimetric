@@ -1,0 +1,13 @@
+LICENSE
+MANIFEST.in
+README.md
+pyproject.toml
+setup.py
+sentimetric/__init__.py
+sentimetric/sentiment.py
+sentimetric.egg-info/PKG-INFO
+sentimetric.egg-info/SOURCES.txt
+sentimetric.egg-info/dependency_links.txt
+sentimetric.egg-info/entry_points.txt
+sentimetric.egg-info/requires.txt
+sentimetric.egg-info/top_level.txt

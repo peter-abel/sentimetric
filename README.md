@@ -38,20 +38,6 @@ print(result)
 
 Sentimetric now supports multiple LLM providers! Choose from OpenAI, Google Gemini, Anthropic Claude, Cohere, or Hugging Face.
 
-#### Installation with LLM Support
-
-```bash
-# Install with all LLM providers
-pip install "sentimetric[all]"
-
-# Or install specific providers
-pip install "sentimetric[openai]"      # For OpenAI
-pip install "sentimetric[google]"      # For Google Gemini
-pip install "sentimetric[anthropic]"   # For Anthropic Claude
-pip install "sentimetric[cohere]"      # For Cohere
-pip install "sentimetric[huggingface]" # For Hugging Face
-```
-
 #### Basic LLM Usage
 
 ```python

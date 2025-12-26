@@ -3,3 +3,5 @@ DEPLOYMENT_GUIDE.md
 PROJECT_STRUCTURE.md
 QUICKSTART.md
 test_deployment.py
+dist
+sentimetric.egg-info

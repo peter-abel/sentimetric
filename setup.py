@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="sentimetric",
-    version="1.0.2",
+    version="1.0.3",
     author="Abel Peter",
     author_email="peterabel791@gmail.com",
     description="A modern sentiment analysis library with optional LLM support",

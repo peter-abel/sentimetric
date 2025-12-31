@@ -8,12 +8,12 @@ Sentimetric is a modern, fast, and accurate sentiment analysis library with opti
 
 ## ✨ Features
 
-- 🚀 Fast Rule-Based Analysis
-- 🧠 Multi-LLM Support (OpenAI, Google Gemini, Anthropic Claude, Cohere, Hugging Face)
-- 💰 Cost-Aware Model Selection with automatic fallback to cheaper models
-- 📊 Batch Processing with parallel execution
-- 🎯 High Accuracy with modern slang & emojis
-- 🔧 Simple API: `from sentimetric import analyze`
+-  Fast Rule-Based Analysis
+-  Multi-LLM Support (OpenAI, Google Gemini, Anthropic Claude, Cohere, Hugging Face, DeepSeek)
+-  Cost-Aware Model Selection with automatic fallback to cheaper models
+-  Batch Processing with parallel execution
+-  High Accuracy with modern slang & emojis
+-  Simple API: `from sentimetric import analyze`
 
 ## 🚀 Quick Start
 
@@ -52,6 +52,7 @@ analyzer = LLMAnalyzer(provider="openai", model="gpt-3.5-turbo")
 # analyzer = LLMAnalyzer(provider="anthropic", model="claude-3-haiku-20240307")
 # analyzer = LLMAnalyzer(provider="cohere", model="command")
 # analyzer = LLMAnalyzer(provider="huggingface", model="mistralai/Mixtral-8x7B-Instruct-v0.1")
+# analyzer = LLMAnalyzer(provider="deepseek", model="deepseek-chat")
 
 result = analyzer.analyze("Oh great, another bug 🙄")
 print(result.category)  # 'negative' (catches sarcasm)
@@ -77,6 +78,9 @@ export COHERE_API_KEY="your-cohere-key"
 
 # Hugging Face
 export HUGGINGFACE_API_KEY="your-hf-key"
+
+# DeepSeek
+export DEEPSEEK_API_KEY="your-deepseek-key"
 ```
 
 #### Cost-Aware Features
@@ -106,12 +110,12 @@ See `examples.py` for comprehensive usage examples. Use `python examples.py` to 
 
 ### Classes
 - `Analyzer` - Fast rule-based sentiment analyzer
-- `LLMAnalyzer` - Multi-provider LLM analyzer (OpenAI, Google, Anthropic, Cohere, Hugging Face)
+- `LLMAnalyzer` - Multi-provider LLM analyzer (OpenAI, Google, Anthropic, Cohere, Hugging Face, DeepSeek)
 - `SentimentResult` - Result container with polarity, category, confidence, reasoning, emotions, tone
 - `Benchmark` - Accuracy testing and comparison utilities
 
 ### LLMAnalyzer Constructor Parameters
-- `provider` - LLM provider ('openai', 'google', 'anthropic', 'cohere', 'huggingface', or 'auto')
+- `provider` - LLM provider ('openai', 'google', 'anthropic', 'cohere', 'huggingface', 'deepseek', or 'auto')
 - `model` - Model name or 'auto' for cheapest available
 - `api_key` - API key (optional, uses environment variables)
 - `fallback_to_cheaper` - Whether to fall back to cheaper models if requested model fails (default: True)

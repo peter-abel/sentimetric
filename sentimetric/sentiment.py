@@ -303,6 +303,14 @@ class LLMAnalyzer:
             'env_var': 'HUGGINGFACE_API_KEY',
             'package': 'huggingface_hub',
             'key_prefix': 'hf_'
+        },
+        'deepseek': {
+            'name': 'DeepSeek',
+            'models': ['deepseek-chat', 'deepseek-coder'],
+            'cheapest': 'deepseek-chat',
+            'env_var': 'DEEPSEEK_API_KEY',
+            'package': 'openai',  # Uses OpenAI-compatible API
+            'key_prefix': None
         }
     }
     
@@ -687,6 +695,15 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
                 self._client = InferenceClient(token=self.api_key)
                 self._analyze_func = self._analyze_huggingface
                 
+            elif self.provider == 'deepseek':
+                import openai
+                # DeepSeek uses OpenAI-compatible API with custom base URL
+                self._client = openai.OpenAI(
+                    api_key=self.api_key,
+                    base_url="https://api.deepseek.com"
+                )
+                self._analyze_func = self._analyze_deepseek
+                
             self._client_initialized = True
             
         except ImportError as e:
@@ -732,7 +749,7 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
                 self.model = self.PROVIDERS[self.provider]['cheapest']
                 try:
                     # Re-initialize client with new model if needed
-                    if self.provider in ['openai', 'anthropic', 'cohere', 'huggingface']:
+                    if self.provider in ['openai', 'anthropic', 'cohere', 'huggingface', 'deepseek']:
                         self._client_initialized = False
                         self._init_provider_client()
                     
@@ -843,6 +860,26 @@ Understand: modern slang, sarcasm, emojis, context, mixed emotions."""
         if start_idx != -1 and end_idx != 0:
             content = content[start_idx:end_idx]
         
+        data = json.loads(content)
+        
+        return self._create_result(data)
+    
+    def _analyze_deepseek(self, text: str) -> SentimentResult:
+        """Analyze using DeepSeek (OpenAI-compatible API)"""
+        import json
+        
+        response = self._client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": f"Analyze: {text}"}
+            ],
+            temperature=0.1,
+            max_tokens=500
+        )
+        
+        content = response.choices[0].message.content.strip()
+        content = content.replace('```json', '').replace('```', '').strip()
         data = json.loads(content)
         
         return self._create_result(data)

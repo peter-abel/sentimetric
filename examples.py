@@ -64,7 +64,7 @@ def multi_llm_example():
     # Note: These examples will only work if you have the corresponding API keys
     # and packages installed
     
-    providers_to_try = ['openai', 'google', 'anthropic', 'cohere', 'huggingface']
+    providers_to_try = ['openai', 'google', 'anthropic', 'cohere', 'huggingface', 'deepseek']
     
     for text in test_texts:
         print(f"\n📝 Text: '{text}'")
@@ -163,5 +163,5 @@ if __name__ == "__main__":
     print("\nNote: LLM examples require:")
     print("  1. Corresponding API keys set as environment variables")
     print("  2. Optional dependencies installed:")
-    print("     pip install sentimetric[openai] sentimetric[google] sentimetric[anthropic] sentimetric[cohere] sentimetric[huggingface]")
+    print("     pip install sentimetric[openai] sentimetric[google] sentimetric[anthropic] sentimetric[cohere] sentimetric[huggingface] sentimetric[deepseek]")
     print("  or: pip install sentimetric[all]")

@@ -105,16 +105,41 @@ class Analyzer:
             'insane': 0.8, 'crazy': 0.7, 'sick': 0.8, 'fire': 0.9,
             'lit': 0.8, 'dope': 0.7, 'goat': 0.9, 'beast': 0.8,
             'savage': 0.7, 'slaps': 0.8, 'vibes': 0.6, 'based': 0.6,
+            # Additional modern slang from user's list
+            'unreal': 0.75, 'mental': 0.65, 'banger': 0.9, 'bussin': 0.9,
+            'hits different': 0.9, 'goes hard': 0.9, 'clean': 0.75, 'crisp': 0.75,
+            'fresh': 0.75, 'w': 0.9, 'dub': 0.9, 'goated': 0.9, "chef's kiss": 0.9,
+            'chefs kiss': 0.9, 'highkey': 0.75, 'fr fr': 0.65, 'no cap': 0.65,
+            'frfr': 0.65, 'ong': 0.65, 'deadass': 0.65, 'facts': 0.6,
+            'periodt': 0.65, 'period': 0.6, 'sheesh': 0.9, 'sheeesh': 1.0,
+        }
+        
+        # Modern slang (negative context) - new from user's list
+        self.slang_negative = {
+            'l': -0.9, 'mid': -0.75, 'mid af': -0.9, 'trash': -0.9,
+            'garbage': -0.9, 'ass': -0.75, 'cringe': -0.9, 'yikes': -0.75,
+            'oof': -0.65, 'rip': -0.5, 'cap': -0.75, 'sus': -0.5,
+            'sketch': -0.6, 'sketchy': -0.6, 'whack': -0.75, 'wack': -0.75,
+            'flop': -0.9, 'flopped': -0.9,
         }
         
         self.intensifiers = {
             'very': 1.3, 'really': 1.3, 'extremely': 1.5, 'absolutely': 1.5,
             'incredibly': 1.5, 'so': 1.2, 'super': 1.4, 'ultra': 1.4,
+            # Additional intensifiers from user's list
+            'completely': 1.8, 'totally': 1.8, 'utterly': 1.8, 'amazingly': 2.0,
+            'exceptionally': 2.0, 'particularly': 1.5, 'especially': 1.5,
+            'truly': 1.5, 'genuinely': 1.5, 'literally': 1.5, 'quite': 1.3,
+            'pretty': 1.3, 'fairly': 1.2, 'rather': 1.2, 'somewhat': 1.1,
+            'kinda': 1.1, 'kind of': 1.1, 'sort of': 1.1,
         }
         
         self.diminishers = {
             'slightly': 0.5, 'somewhat': 0.5, 'fairly': 0.6, 'rather': 0.6,
             'pretty': 0.7, 'quite': 0.7, 'kinda': 0.5, 'sorta': 0.5,
+            # Additional reducers from user's list
+            'barely': 0.5, 'hardly': 0.5, 'a bit': 0.8, 'a little': 0.8,
+            'mildly': 0.8,
         }
         
         self.negations = {
@@ -122,7 +147,46 @@ class Analyzer:
             "don't", "doesn't", "didn't", "can't", "won't", "shouldn't",
             "isn't", "aren't", "wasn't", "weren't", "hasn't", "haven't",
             'without', 'lack',
+            # Additional negations from user's list
+            'none', 'nowhere', 'cannot', 'wouldn\'t', 'couldn\'t', 'hadn\'t',
+            'doesn\'t', 'don\'t', 'didn\'t', 'ain\'t', 'barely', 'hardly',
+            'scarcely', 'rarely', 'seldom',
         }
+        
+        # Negation scope terminators
+        self.negation_terminators = [
+            'but', 'however', 'although', 'though', 'yet', 'except',
+            '.', '!', '?', ',', ';'
+        ]
+        
+        # Sarcasm indicators
+        self.sarcasm_indicators = [
+            # Explicit markers
+            '/s', '/sarcasm', '(sarcasm)', 
+            
+            # Phrases that are often sarcastic
+            'oh great',
+            'oh wonderful',
+            'just what i needed',
+            'exactly what i wanted',
+            'my favorite',
+            'i love how',
+            'love how',
+            'thanks for',
+            'really appreciate',
+            
+            # With positive words but negative context
+            'wonderful!',
+            'fantastic!',
+            'perfect!',
+            'great!',
+            'excellent!',
+            'brilliant!',
+            'amazing!',
+        ]
+        
+        # Emojis that often indicate sarcasm
+        self.sarcasm_emojis = ['🙄', '😒', '🙃', '👏', '👍']
         
         # Emojis
         self.emoji_positive = {
@@ -130,12 +194,26 @@ class Analyzer:
             '😍': 0.9, '🥰': 0.9, '😘': 0.8, '❤️': 0.8, '💕': 0.8,
             '👍': 0.7, '👏': 0.7, '🙌': 0.8, '✨': 0.6, '⭐': 0.6,
             '🔥': 0.8, '💯': 0.8, '🎉': 0.7, '😂': 0.6, '🤣': 0.6,
+            # Additional positive emojis from user's list
+            '🙂': 0.5, '😌': 0.5, '🥰': 0.9, '😘': 0.8, '💖': 0.8,
+            '💗': 0.8, '💓': 0.8, '⚡': 0.75, '💪': 0.75, '🎊': 0.7,
+            '🏆': 0.8, '🥇': 0.8, '🌟': 0.6,
         }
         
         self.emoji_negative = {
             '😢': -0.7, '😭': -0.7, '😞': -0.6, '😔': -0.6, '😠': -0.8,
             '😡': -0.9, '🤬': -0.9, '💔': -0.8, '👎': -0.7, '😒': -0.6,
             '🙄': -0.4,
+            # Additional negative emojis from user's list
+            '😥': -0.65, '😓': -0.55, '😟': -0.55, '😕': -0.4,
+            '😤': -0.75, '😑': -0.4, '💀': -0.4,
+        }
+        
+        # Context-dependent emojis (can be positive or negative)
+        self.emoji_context_dependent = {
+            '🙃': -0.75,  # Upside down smile - usually indicates problems
+            '😬': -0.4,   # Grimacing
+            '🤡': -0.9,   # Clown - self-deprecating or mocking
         }
     
     def analyze(self, text: str) -> SentimentResult:
@@ -159,6 +237,19 @@ class Analyzer:
         negation_active = False
         intensifier_mult = 1.0
         
+        # Check for sarcasm indicators
+        sarcasm_detected = False
+        for indicator in self.sarcasm_indicators:
+            if indicator in text_lower:
+                sarcasm_detected = True
+                break
+        
+        # Check for sarcasm emojis
+        for char in text:
+            if char in self.sarcasm_emojis:
+                sarcasm_detected = True
+                break
+        
         for word in words:
             if word in self.negations:
                 negation_active = True
@@ -174,11 +265,15 @@ class Analyzer:
             
             score = 0.0
             
-            # Check slang (if positive context)
+            # Check slang (positive context)
             if word in self.slang_positive:
                 context_positive = any(ind in text_lower for ind in ['!', 'thank', 'wow', 'omg'])
                 if context_positive:
                     score = self.slang_positive[word]
+            
+            # Check slang (negative context)
+            elif word in self.slang_negative:
+                score = self.slang_negative[word]
             
             # Check regular words
             elif word in self.positive_words:
@@ -204,6 +299,9 @@ class Analyzer:
             elif char in self.emoji_negative:
                 sentiment_score += self.emoji_negative[char]
                 sentiment_count += 1
+            elif char in self.emoji_context_dependent:
+                sentiment_score += self.emoji_context_dependent[char]
+                sentiment_count += 1
         
         # Exclamation boost
         if text.count('!') > 0 and sentiment_score != 0:
@@ -213,6 +311,10 @@ class Analyzer:
         # Question mark reduction
         if '?' in text and sentiment_count > 0:
             sentiment_score *= 0.8
+        
+        # Sarcasm handling - flip sentiment if sarcasm detected
+        if sarcasm_detected and sentiment_score > 0:
+            sentiment_score = -sentiment_score * 0.7
         
         # Normalize
         if sentiment_count > 0:
@@ -235,6 +337,10 @@ class Analyzer:
         # Confidence
         confidence = min(1.0, (sentiment_count / max(1, word_count)) * 3)
         confidence = max(0.3, confidence)  # Minimum confidence
+        
+        # Adjust confidence for sarcasm detection
+        if sarcasm_detected:
+            confidence = min(confidence * 1.2, 1.0)
         
         return SentimentResult(
             polarity=round(polarity, 4),
